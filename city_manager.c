@@ -2,9 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h>
+#include <unistd.h> //pt apeluri de sistem
 #include <sys/stat.h>
-#include <fcntl.h>
+#include <fcntl.h> //file control
+#include <signal.h>
+#include <sys/wait.h>
 
 #define MAX_NAME 64
 #define MAX_CAT 64
@@ -51,6 +53,24 @@ void log_operation(const char *district_id, const char *role, const char *user, 
     }
 }
 
+// Functie helper pentru faza 2: Notifica monitor_reports
+int notify_monitor() {
+    int fd = open(".monitor_pid", O_RDONLY);
+    if (fd < 0) return -1; // Fisierul nu exista (monitorul nu ruleaza)
+    
+    char buf[32] = {0};
+    int bytes = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    
+    if (bytes > 0) {
+        int pid = atoi(buf);
+        if (pid > 0 && kill(pid, SIGUSR1) == 0) {
+            return 0; // Succes
+        }
+    }
+    return -1; // Eroare la trimiterea semnalului
+}
+
 void add_report(const char *district_id, const char *role, const char *user_name) {
     if(mkdir(district_id, 0750) == -1) {
         // Folder exists or error
@@ -92,6 +112,55 @@ void add_report(const char *district_id, const char *role, const char *user_name
     }
 
     close(fd);
+
+    // Faza 2: Notificam monitorul si setam mesajul corespunzator pentru log
+        char log_msg[256];
+        if (notify_monitor() == 0) {
+            snprintf(log_msg, sizeof(log_msg), "add (monitor notificat cu succes)");
+        } else {
+            snprintf(log_msg, sizeof(log_msg), "add (eroare: monitorul nu a putut fi notificat)");
+        }
+        log_operation(district_id, role, user_name, log_msg);
+}
+
+// Functie noua Faza 2: Stergerea unui district intreg cu rm -rf
+void remove_district(const char *district_id, const char *role) {
+    if (strcmp(role, "manager") != 0) {
+        fprintf(stderr, "Eroare: Doar managerul poate sterge un district complet!\n");
+        return;
+    }
+
+    // Masura de siguranta minora ca sa nu stergem "/" sau ".." accidental
+    if (strchr(district_id, '/') != NULL || strcmp(district_id, ".") == 0 || strcmp(district_id, "..") == 0) {
+        fprintf(stderr, "Eroare: Nume de district invalid.\n");
+        return;
+    }
+
+    // Stergem link-ul simbolic
+    char link_name[256];
+    snprintf(link_name, sizeof(link_name), "active_reports-%s", district_id);
+    unlink(link_name);
+
+    pid_t pid = fork();
+    
+    if (pid < 0) {
+        perror("Eroare la fork");
+    } else if (pid == 0) {
+        // Suntem in procesul copil. Folosim execlp pentru a apela rm -rf
+        execlp("rm", "rm", "-rf", district_id, NULL);
+        // Daca ajungem aici, execlp a esuat
+        perror("Eroare la executia comenzii rm");
+        exit(1);
+    } else {
+        // Suntem in procesul parinte. Asteptam sa se termine comanda de stergere
+        int status;
+        wait(&status);
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            printf("Districtul '%s' si link-ul simbolic au fost sterse cu succes.\n", district_id);
+        } else {
+            printf("A aparut o eroare la stergerea districtului.\n");
+        }
+    }
 }
 
 void list_reports(const char *district_id, const char *role, const char *user) {
@@ -316,6 +385,11 @@ int main(int argc, char *argv[]) {
     if (!role || !user || !cmd || !district) {
         printf("Usage: ./city_manager --role <role> --user <user> <command> <district_id> [extra_args]\n");
         return 1;
+    }
+
+    if (strcmp(cmd, "remove_district") == 0) {
+        remove_district(district, role);
+        return 0; // Oprim executia aici pt ca am sters districtul
     }
 
     manage_symlink(district);
