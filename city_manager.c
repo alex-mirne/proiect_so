@@ -146,9 +146,7 @@ void remove_district(const char *district_id, const char *role) {
     if (pid < 0) {
         perror("Eroare la fork");
     } else if (pid == 0) {
-        // Suntem in procesul copil. Folosim execlp pentru a apela rm -rf
         execlp("rm", "rm", "-rf", district_id, NULL);
-        // Daca ajungem aici, execlp a esuat
         perror("Eroare la executia comenzii rm");
         exit(1);
     } else {
@@ -158,7 +156,7 @@ void remove_district(const char *district_id, const char *role) {
         if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
             printf("Districtul '%s' si link-ul simbolic au fost sterse cu succes.\n", district_id);
         } else {
-            printf("A aparut o eroare la stergerea districtului.\n");
+            printf("A aparut o eroare la stergerea districtulu6i.\n");
         }
     }
 }
