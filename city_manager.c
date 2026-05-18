@@ -12,6 +12,9 @@
 #define MAX_CAT 64
 #define MAX_DESC 256
 
+// 0 = copilul inca ruleaza, 1 = copilul a terminat
+volatile sig_atomic_t child_ready = 0;
+
 typedef struct Report {
     int report_id;
     char inspector_name[MAX_NAME];
@@ -48,6 +51,8 @@ void handle_sigchld(int sig) {
         // Folosim write in loc de printf pentru siguranta in handlere de semnal
         char msg[] = "\n[SISTEM] Districtul a fost sters complet in background!\n";
         write(STDOUT_FILENO, msg, strlen(msg));
+
+        child_ready = 1; //schimbam flagul, parintele poate acum sa iasa din bucla
     }
 }
 
@@ -180,6 +185,9 @@ void remove_district(const char *district_id, const char *role) {
         // } else {
         //     printf("A aparut o eroare la stergerea districtulu6i.\n");
         // }
+        while (!child_ready) {
+            pause(); // Pune parintele pe pauza (0% CPU). Cand vine SIGCHLD, pause() se termina.
+        }
         printf("Comanda de stergere a districtului '%s' a fost lansata in background (PID: %d).\n", district_id, pid);
     }
 }
@@ -433,5 +441,6 @@ int main(int argc, char *argv[]) {
     else if (strcmp(cmd, "filter") == 0) {
         filter_reports(district, role, user, argc, argv, arg_idx_after_district);
     }
+
     return 0;
 }
