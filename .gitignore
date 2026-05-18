@@ -1,4 +1,7 @@
 city_manager
+city_hub
+monitor_reports
+scorer
 *.o
 .DS_Store
 districts/
