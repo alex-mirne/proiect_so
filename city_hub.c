@@ -39,10 +39,10 @@ void start_monitor() {
         }
 
         if (monitor_pid == 0) {
-            // --- NEPOTUL (monitor_reports) ---
+            // monitor_reports
             close(pipe_fd[0]); // Inchidem capatul de citire (nu avem nevoie de el)
             
-            // REDIRECTIONARE MAGICA: Legam iesirea standard la capatul de scriere al pipe-ului
+            // Legam iesirea standard la capatul de scriere al pipe-ului
             dup2(pipe_fd[1], STDOUT_FILENO); 
             close(pipe_fd[1]); // Putem inchide originalul dupa clonare
             
@@ -50,7 +50,7 @@ void start_monitor() {
             perror("Eroare la pornirea monitor_reports");
             exit(1);
         } else {
-            // --- COPILUL (hub_mon) ---
+            // hub_mon
             close(pipe_fd[1]); // Inchidem capatul de scriere (doar citim de la monitor)
             
             char buffer[256];

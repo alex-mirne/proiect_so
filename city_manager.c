@@ -4,7 +4,7 @@
 #include <time.h>
 #include <unistd.h> //pt apeluri de sistem
 #include <sys/stat.h>
-#include <fcntl.h> //file control
+#include <fcntl.h> //file control flags
 #include <signal.h>
 #include <sys/wait.h>
 
@@ -35,6 +35,20 @@ void get_permissions_string(mode_t mode, char *str) {
     if (mode & S_IWOTH) str[7] = 'w';
     if (mode & S_IXOTH) str[8] = 'x';
     str[9] = '\0';
+}
+
+// Aceasta functie va fi chemata automat de Kernel cand comanda 'rm' isi termina treaba
+void handle_sigchld(int sig) {
+    int status;
+    pid_t pid;
+    
+    // Folosim waitpid cu WNOHANG. 
+    // -1 inseamna "accepta orice copil". 
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        // Folosim write in loc de printf pentru siguranta in handlere de semnal
+        char msg[] = "\n[SISTEM] Districtul a fost sters complet in background!\n";
+        write(STDOUT_FILENO, msg, strlen(msg));
+    }
 }
 
 void log_operation(const char *district_id, const char *role, const char *user, const char *action) {
@@ -89,7 +103,7 @@ void add_report(const char *district_id, const char *role, const char *user_name
     chmod(file_path, 0664);
 
     Report r;
-    memset(&r, 0, sizeof(Report));
+    memset(&r, 0, sizeof(Report)); //sau r = {0}; - practic memset initializeaza tot cu 0-uri
     
     r.report_id = (int)time(NULL);
     strncpy(r.inspector_name, user_name, MAX_NAME - 1);
@@ -100,10 +114,11 @@ void add_report(const char *district_id, const char *role, const char *user_name
     printf("Category (road/lighting/flooding): "); scanf("%s", r.category);
     printf("Severity level (1/2/3): "); scanf("%d", &r.severity);
     printf("Description: "); 
-    getchar(); 
+    getchar();//inghite enter-ul ca sa nu-l cititm in fgets si sa dam skip la description 
     fgets(r.description, MAX_DESC, stdin);
-    r.description[strcspn(r.description, "\n")] = 0;
+    r.description[strcspn(r.description, "\n")] = 0; //punem \0 in loc de \n la final
 
+    //scrierea
     if (write(fd, &r, sizeof(Report)) < 0) {
         perror("Eroare la scrierea raportului");
     } else {
@@ -141,6 +156,13 @@ void remove_district(const char *district_id, const char *role) {
     snprintf(link_name, sizeof(link_name), "active_reports-%s", district_id);
     unlink(link_name);
 
+    //paralelism
+    struct sigaction sa;
+    sa.sa_handler = handle_sigchld; // Functia creata de noi la Pasul 1
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP; // NOCLDSTOP ignora copiii care iau doar "pauza"
+    sigaction(SIGCHLD, &sa, NULL);
+
     pid_t pid = fork();
     
     if (pid < 0) {
@@ -151,13 +173,14 @@ void remove_district(const char *district_id, const char *role) {
         exit(1);
     } else {
         // Suntem in procesul parinte. Asteptam sa se termine comanda de stergere
-        int status;
-        wait(&status);
-        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-            printf("Districtul '%s' si link-ul simbolic au fost sterse cu succes.\n", district_id);
-        } else {
-            printf("A aparut o eroare la stergerea districtulu6i.\n");
-        }
+        // int status;
+        // wait(&status);
+        // if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+        //     printf("Districtul '%s' si link-ul simbolic au fost sterse cu succes.\n", district_id);
+        // } else {
+        //     printf("A aparut o eroare la stergerea districtulu6i.\n");
+        // }
+        printf("Comanda de stergere a districtului '%s' a fost lansata in background (PID: %d).\n", district_id, pid);
     }
 }
 
@@ -256,7 +279,7 @@ void remove_report(const char *district_id, const char *role, const char *user, 
 
         struct stat st;
         fstat(fd, &st);
-        ftruncate(fd, st.st_size - sizeof(Report));
+        ftruncate(fd, st.st_size - sizeof(Report));//dupa ce am eliminat raportul, fortam fisieerul sa aiba dimensiunea noua = dimensiunea veche - 1 raport
         printf("Raportul %d a fost sters.\n", target_id);
         log_operation(district_id, role, user, "remove_report");
     }

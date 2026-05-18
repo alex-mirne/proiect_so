@@ -2,3 +2,4 @@ city_manager
 *.o
 .DS_Store
 districts/
+*.tar.gz

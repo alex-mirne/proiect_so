@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
     }
     close(fd);
 
-    // Tot ce printam aici va fi capturat de pipe-ul din city_hub!
+    // Tot ce printam aici va fi capturat de pipe-ul din city_hub
     printf("--- Punctaje Workload: %s ---\n", district);
     for (int i = 0; i < num_inspectors; i++) {
         printf(" -> Inspector %s: %d puncte\n", scores[i].name, scores[i].score);
