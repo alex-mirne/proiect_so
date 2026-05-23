@@ -136,8 +136,10 @@ void add_report(const char *district_id, const char *role, const char *user_name
     // Faza 2: Notificam monitorul si setam mesajul corespunzator pentru log
         char log_msg[256];
         if (notify_monitor() == 0) {
+            printf("[SISTEM] Monitorul a fost notificat de noul raport (Semnal SIGUSR1 trimis).\n");
             snprintf(log_msg, sizeof(log_msg), "add (monitor notificat cu succes)");
         } else {
+            printf("[SISTEM] Atentie: Monitorul nu ruleaza (Semnal netrimis).\n");
             snprintf(log_msg, sizeof(log_msg), "add (eroare: monitorul nu a putut fi notificat)");
         }
         log_operation(district_id, role, user_name, log_msg);

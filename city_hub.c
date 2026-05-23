@@ -126,6 +126,10 @@ void calculate_scores(int count, char *districts[]) {
         close(pipes[i][0]);
     }
     printf("====================================================\n");
+    // Asteptam curatarea proceselor scorer
+    for (int i = 0; i < count; i++) {
+        waitpid(pids[i], NULL, 0);
+    }
 }
 
 int main() {
